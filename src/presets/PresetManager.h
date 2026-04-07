@@ -18,7 +18,7 @@ class PresetManager
 {
 public:
     static const juce::String presetFileExtension; // ".phazon"
-    static const int          numFactoryPresets;   // 10
+    static const int          numFactoryPresets;   // 22
 
     explicit PresetManager (juce::AudioProcessorValueTreeState& apvts);
 
@@ -70,6 +70,18 @@ private:
     void applyFactoryPreset7_GlassHarmonic();
     void applyFactoryPreset8_WoodBlock();
     void applyFactoryPreset9_ShimmerPad();
+    void applyFactoryPreset10_ResinCello();
+    void applyFactoryPreset11_WireViola();
+    void applyFactoryPreset12_BentBell();
+    void applyFactoryPreset13_BronzePlate();
+    void applyFactoryPreset14_SkinPulse();
+    void applyFactoryPreset15_TautFrameDrum();
+    void applyFactoryPreset16_DustSwarm();
+    void applyFactoryPreset17_BrokenOrbit();
+    void applyFactoryPreset18_HarmonicBloom();
+    void applyFactoryPreset19_PolarDrone();
+    void applyFactoryPreset20_FogChoir();
+    void applyFactoryPreset21_MembraneHarp();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PresetManager)
 };

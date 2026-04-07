@@ -2,6 +2,7 @@
 
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "PluginProcessor.h"
+#include <memory>
 
 class PhazonAudioProcessorEditor : public juce::AudioProcessorEditor
 {
@@ -13,7 +14,10 @@ public:
     void resized() override;
 
 private:
+    class Impl;
+
     PhazonAudioProcessor& processorRef;
+    std::unique_ptr<Impl> impl_;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PhazonAudioProcessorEditor)
 };

@@ -6,6 +6,16 @@
 
 static constexpr float kPi = 3.14159265358979323846f;
 
+namespace
+{
+float nextChaosSample (unsigned int& state) noexcept
+{
+    state = state * 1664525u + 1013904223u;
+    const float normalized = static_cast<float> ((state >> 8) & 0x00ffffffu) / static_cast<float> (0x00ffffffu);
+    return normalized * 2.0f - 1.0f;
+}
+}
+
 //==============================================================================
 // Construction
 //==============================================================================
@@ -48,7 +58,7 @@ void NetworkIf::resetStates (bool hard, bool clearBow)
         bow_phi   = 0.0f;
         bow_dphi  = 0.0f;
     }
-    if (hard)
+    if (clearBow)
         bowVelocity = 0.0f;
 }
 
@@ -67,20 +77,61 @@ void NetworkIf::updatePitch (float midiNote, float tuning)
 void NetworkIf::renderNextBlock (float* output, int numSamples)
 {
     for (int i = 0; i < numSamples; ++i)
+        output[i] = processSample ({});
+}
+
+float NetworkIf::processSample (const ModMatrix::DeltaFrame& modDelta)
+{
+    const auto clamp01 = [] (float value) { return std::clamp (value, 0.0f, 1.0f); };
+
+    const float chaosDelta = modDelta[(size_t) ModMatrix::Destination::Chaos];
+    const float forceDelta = modDelta[(size_t) ModMatrix::Destination::Force];
+    const float overtoneDelta = modDelta[(size_t) ModMatrix::Destination::Overtones];
+    const float bodyDelta = modDelta[(size_t) ModMatrix::Destination::Body];
+    const float springDelta = modDelta[(size_t) ModMatrix::Destination::Spring];
+
+    p_chaos = clamp01 (baseChaos_ + chaosDelta);
+    p_springDamping = clamp01 (baseSpringDamping_);
+    p_bowForce = clamp01 (baseBowForce_ + forceDelta);
+    p_massDamping = clamp01 (baseMassDamping_ + bodyDelta);
+    p_nonlinearity = clamp01 (baseNonlinearity_ + overtoneDelta * 0.35f);
+    p_pickupBase = clamp01 (basePickupBase_ + overtoneDelta * 0.30f);
+    springModAmount_ = springDelta;
+
+    if (p_chaos > 0.0f && profile_ != Profile::Eco)
     {
-        switch (profile_)
+        if (--chaosCountdown_ <= 0)
         {
-            case Profile::OneDimensional:  calculateFullSystem1D();  break;
-            case Profile::TwoDimensional:  calculateFullSystem2D();  break;
-            case Profile::Eco:             calculateFullSystemEco(); break;
+            chaosCountdown_ = 16;
+            chaosTarget_ = nextChaosSample (chaosState_);
         }
 
-        if (bowVelocity != 0.0f)
-            bow();
-
-        NR();
-        output[i] = getROutput (p_pickupBase);
+        chaosSmoothed_ += (chaosTarget_ - chaosSmoothed_) * 0.075f;
     }
+    else
+    {
+        chaosSmoothed_ = 0.0f;
+        chaosTarget_ = 0.0f;
+        chaosCountdown_ = 0;
+    }
+
+    p_excitationRatio = clamp01 (baseExcitationRatio_ + chaosSmoothed_ * p_chaos * 0.04f);
+    bowPos_curr = p_excitationRatio;
+
+    refreshCoefficients();
+
+    switch (profile_)
+    {
+        case Profile::OneDimensional:  calculateFullSystem1D();  break;
+        case Profile::TwoDimensional:  calculateFullSystem2D();  break;
+        case Profile::Eco:             calculateFullSystemEco(); break;
+    }
+
+    if (bowVelocity != 0.0f)
+        bow();
+
+    NR();
+    return getROutput (p_pickupBase);
 }
 
 //==============================================================================
@@ -90,6 +141,16 @@ void NetworkIf::renderNextBlock (float* output, int numSamples)
 void NetworkIf::changeDimensions (int n)
 {
     n = std::max (1, std::min (n, N_MAX_TOTAL));
+
+    if (profile_ == Profile::TwoDimensional)
+    {
+        const int side = std::clamp ((int) std::round (std::sqrt ((float) n)), 2, 8);
+        n2d_x_ = side;
+        n2d_y_ = side;
+        resize_ (n2d_x_ * n2d_y_);
+        return;
+    }
+
     resize_ (n);
 }
 
@@ -130,6 +191,23 @@ void NetworkIf::setParameterWithID (int id, float value, bool /*notify*/)
         case kDetune:           p_detune          = value; break;
         default: break;
     }
+}
+
+void NetworkIf::setModulationBaseValues (float springDamping,
+                                         float massDamping,
+                                         float bowForce,
+                                         float nonlinearity,
+                                         float excitationRatio,
+                                         float pickupBase,
+                                         float chaos)
+{
+    baseSpringDamping_ = springDamping;
+    baseMassDamping_ = massDamping;
+    baseBowForce_ = bowForce;
+    baseNonlinearity_ = nonlinearity;
+    baseExcitationRatio_ = excitationRatio;
+    basePickupBase_ = pickupBase;
+    baseChaos_ = chaos;
 }
 
 //==============================================================================
@@ -179,6 +257,11 @@ void NetworkIf::refreshCoefficients()
     bowForceScale_ = p_bowForce * 5.0f;
     alphaBow_      = 50.0f + p_bowForce * 450.0f;   // 50 … 500
     betaBow_       = p_nonlinearity;
+
+    const float springScale = std::max (0.1f, 1.0f + springModAmount_ * 0.5f
+                                              + chaosSmoothed_ * p_chaos * 0.08f);
+    baseSpring_ *= springScale;
+    alphaBow_ *= std::max (0.5f, 1.0f + chaosSmoothed_ * p_chaos * 0.12f);
 }
 
 //==============================================================================
@@ -387,11 +470,10 @@ void NetworkIf::bow()
 
     // Read structural velocity at bow position: v_struct = B·v^n
     //   v^n = (x^n − x^{n-1}) / dt  (approximation using previous step)
-    std::vector<float> v (n_total);
     for (int i = 0; i < n_total; ++i)
-        v[i] = (x[i] - x_prev[i]) / dt_;
+        velocityScratch_[(size_t) i] = (x[(size_t) i] - x_prev[(size_t) i]) / dt_;
 
-    float v_struct = interpolation3 (v.data(), n_total, pos);
+    float v_struct = interpolation3 (velocityScratch_.data(), n_total, pos);
     float v_rel    = bowVelocity - v_struct;
 
     bow_phi  = bowPhi_  (v_rel);
@@ -422,20 +504,14 @@ void NetworkIf::NR()
     bowP = std::max (0.0f, std::min (bowP, float (n - 1)));
 
     // x_prev_snapshot: x at start of this step (for velocity calculation in NR)
-    std::vector<float> x_n = x;
+    std::copy (x.begin(), x.end(), xStepStart_.begin());
 
     // Initial guess: linear predictor
-    std::vector<float> x_new (n);
     for (int i = 0; i < n; ++i)
-        x_new[i] = 2.0f * x[i] - x_prev[i];
+        xNewScratch_[(size_t) i] = 2.0f * x[(size_t) i] - x_prev[(size_t) i];
 
     // Precompute cubic weight vector w (N-dim, sparse: 4 non-zeros)
-    std::vector<float> w (n, 0.0f);
-    getCubicWeightVector (bowP, n, w);
-
-    // Working copies for Jacobian solve
-    std::vector<float> J (n * n);
-    std::vector<float> R (n);
+    getCubicWeightVector (bowP, n, weightScratch_);
 
     for (int iter = 0; iter < 3; ++iter)
     {
@@ -443,7 +519,7 @@ void NetworkIf::NR()
         // v_struct = B·(x_new − x_n)/dt  =  w^T · (x_new − x_n)/dt
         float v_struct = 0.0f;
         for (int i = 0; i < n; ++i)
-            v_struct += w[i] * (x_new[i] - x_n[i]);
+            v_struct += weightScratch_[(size_t) i] * (xNewScratch_[(size_t) i] - xStepStart_[(size_t) i]);
         v_struct *= idt;
 
         float v_rel  = bowVelocity - v_struct;
@@ -455,33 +531,35 @@ void NetworkIf::NR()
         {
             float Ax_i = 0.0f;
             for (int j = 0; j < n; ++j)
-                Ax_i += A_mat_[i * n + j] * x_new[j];
+                Ax_i += A_mat_[i * n + j] * xNewScratch_[(size_t) j];
 
             // G^T·φ at row i = w[i]·φ
-            R[i] = Ax_i - b_vec_[i] - w[i] * phi;
+            residualScratch_[(size_t) i] = Ax_i - b_vec_[(size_t) i] - weightScratch_[(size_t) i] * phi;
         }
 
         // ----- Jacobian:  J = A + (φ'/dt)·w·wᵀ  -----
         float scale = dphi * idt;
         for (int i = 0; i < n; ++i)
             for (int j = 0; j < n; ++j)
-                J[i * n + j] = A_mat_[i * n + j] + scale * w[i] * w[j];
+                jacobianScratch_[(size_t) (i * n + j)] = A_mat_[(size_t) (i * n + j)]
+                                                       + scale * weightScratch_[(size_t) i] * weightScratch_[(size_t) j];
 
         // ----- Solve J·δx = −R  -----
         // Negate R in-place (becomes RHS −R)
-        for (int i = 0; i < n; ++i) R[i] = -R[i];
+        for (int i = 0; i < n; ++i)
+            residualScratch_[(size_t) i] = -residualScratch_[(size_t) i];
 
-        if (!gaussianSolve (J, R, n))
+        if (!gaussianSolve (jacobianScratch_, residualScratch_, n))
             break;   // singular (shouldn't happen in practice)
 
         // R now contains δx
         for (int i = 0; i < n; ++i)
-            x_new[i] += R[i];
+            xNewScratch_[(size_t) i] += residualScratch_[(size_t) i];
     }
 
     // Advance time step
-    x_prev = x_n;
-    x      = x_new;
+    std::copy (xStepStart_.begin(), xStepStart_.begin() + n, x_prev.begin());
+    std::copy (xNewScratch_.begin(), xNewScratch_.begin() + n, x.begin());
 }
 
 //==============================================================================
@@ -570,13 +648,46 @@ void NetworkIf::interpolation3Mult (float* arr, int n, float pos, float value)
 
 void NetworkIf::resize_ (int n)
 {
+    const auto reserveIfNeeded = [] (auto& buffer, int size) {
+        if ((int) buffer.capacity() < size)
+            buffer.reserve ((size_t) size);
+    };
+
+    reserveIfNeeded (x, N_MAX_TOTAL);
+    reserveIfNeeded (x_prev, N_MAX_TOTAL);
+    reserveIfNeeded (b_vec_, N_MAX_TOTAL);
+    reserveIfNeeded (velocityScratch_, N_MAX_TOTAL);
+    reserveIfNeeded (xStepStart_, N_MAX_TOTAL);
+    reserveIfNeeded (xNewScratch_, N_MAX_TOTAL);
+    reserveIfNeeded (weightScratch_, N_MAX_TOTAL);
+    reserveIfNeeded (residualScratch_, N_MAX_TOTAL);
+    reserveIfNeeded (A_mat_, N_MAX_TOTAL * N_MAX_TOTAL);
+    reserveIfNeeded (jacobianScratch_, N_MAX_TOTAL * N_MAX_TOTAL);
+
     n_total = n;
 
-    x.assign     (n, 0.0f);
-    x_prev.assign(n, 0.0f);
+    x.resize ((size_t) n, 0.0f);
+    x_prev.resize ((size_t) n, 0.0f);
+    std::fill (x.begin(), x.end(), 0.0f);
+    std::fill (x_prev.begin(), x_prev.end(), 0.0f);
 
-    A_mat_.assign (n * n, 0.0f);
-    b_vec_.assign (n,     0.0f);
+    A_mat_.resize ((size_t) n * (size_t) n, 0.0f);
+    b_vec_.resize ((size_t) n, 0.0f);
+    velocityScratch_.resize ((size_t) n, 0.0f);
+    xStepStart_.resize ((size_t) n, 0.0f);
+    xNewScratch_.resize ((size_t) n, 0.0f);
+    weightScratch_.resize ((size_t) n, 0.0f);
+    jacobianScratch_.resize ((size_t) n * (size_t) n, 0.0f);
+    residualScratch_.resize ((size_t) n, 0.0f);
+
+    std::fill (A_mat_.begin(), A_mat_.end(), 0.0f);
+    std::fill (b_vec_.begin(), b_vec_.end(), 0.0f);
+    std::fill (velocityScratch_.begin(), velocityScratch_.end(), 0.0f);
+    std::fill (xStepStart_.begin(), xStepStart_.end(), 0.0f);
+    std::fill (xNewScratch_.begin(), xNewScratch_.end(), 0.0f);
+    std::fill (weightScratch_.begin(), weightScratch_.end(), 0.0f);
+    std::fill (jacobianScratch_.begin(), jacobianScratch_.end(), 0.0f);
+    std::fill (residualScratch_.begin(), residualScratch_.end(), 0.0f);
 }
 
 /** Gaussian elimination with partial pivoting.

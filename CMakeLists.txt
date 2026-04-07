@@ -5,16 +5,26 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ---------------------------------------------------------------------------
-# JUCE via FetchContent
+# JUCE dependency
+# Prefer an explicitly supplied local JUCE source or config for offline builds:
+#   cmake -S . -B build -DJUCE_SOURCE_DIR=/path/to/JUCE
+#   cmake -S . -B build -DJUCE_DIR=/path/to/JUCE
+# Fallback to FetchContent when no local package is provided.
 # ---------------------------------------------------------------------------
-include(FetchContent)
-FetchContent_Declare(
-    JUCE
-    GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
-    GIT_TAG        7.0.12
-    GIT_SHALLOW    TRUE
-)
-FetchContent_MakeAvailable(JUCE)
+if (DEFINED JUCE_SOURCE_DIR)
+    add_subdirectory (${JUCE_SOURCE_DIR} JUCE)
+elseif (DEFINED JUCE_DIR)
+    find_package(JUCE CONFIG REQUIRED)
+else()
+    include(FetchContent)
+    FetchContent_Declare(
+        JUCE
+        GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+        GIT_TAG        7.0.12
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(JUCE)
+endif()
 
 # ---------------------------------------------------------------------------
 # Plugin target
@@ -55,6 +65,8 @@ target_sources(Phazon
         src/PluginEditor.h
         src/PluginEditor.cpp
         src/ParameterIDs.h
+        src/PhazonReverb.h
+        src/PostProcessChain.h
         src/engine/NetworkIf.h
         src/engine/NetworkIf.cpp
         src/synth/NetworkVoice.h
@@ -63,6 +75,9 @@ target_sources(Phazon
         src/synth/PhazonSynthesiser.cpp
         src/presets/PresetManager.h
         src/presets/PresetManager.cpp
+        src/ui/PhazonLookAndFeel.h
+        src/ui/PresetBrowser.h
+        src/ui/StringVisualizer.h
 )
 
 target_include_directories(Phazon
@@ -95,4 +110,35 @@ target_link_libraries(Phazon
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
+)
+
+add_executable(phazon_verify
+    tools/phazon_verify.cpp
+    src/engine/NetworkIf.cpp
+    src/synth/NetworkVoice.cpp
+    src/synth/PhazonSynthesiser.cpp
+)
+
+target_include_directories(phazon_verify
+    PRIVATE
+        src
+        src/engine
+        src/synth
+)
+
+target_link_libraries(phazon_verify
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_lto_flags
+        juce::juce_recommended_warning_flags
+)
+
+target_compile_definitions(phazon_verify
+    PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
+        JUCE_DISPLAY_SPLASH_SCREEN=0
 )

@@ -3,6 +3,7 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include "../synth/ModMatrix.h"
 
 //==============================================================================
 /**
@@ -72,6 +73,13 @@ public:
     /** Generic parameter setter (matches setParameterWithID in original binary).
      *  id maps to the p_* fields — see NetworkParamID enum below. */
     void setParameterWithID (int id, float value, bool notify = true);
+    void setModulationBaseValues (float springDamping,
+                                  float massDamping,
+                                  float bowForce,
+                                  float nonlinearity,
+                                  float excitationRatio,
+                                  float pickupBase,
+                                  float chaos);
 
     void setSampleRate (float sr);
 
@@ -129,6 +137,7 @@ public:
     /** Run the full per-sample pipeline (calculateFullSystem / bow / NR /
      *  getROutput) for @p numSamples and write mono output to @p output. */
     void renderNextBlock (float* output, int numSamples);
+    float processSample (const ModMatrix::DeltaFrame& modDelta);
 
     /** Update pitch mid-note without resetting state (for MPE pitchbend). */
     void updatePitch (float midiNote, float tuning);
@@ -145,6 +154,7 @@ public:
     float p_pickupBase      = 0.70f;  ///< normalised pickup position         [0..1]
     float p_octave          = 0.00f;  ///< octave transpose (semitones × 12)
     float p_detune          = 0.00f;  ///< fine detune in semitones
+    float p_chaos           = 0.00f;  ///< stochastic perturbation amount     [0..1]
 
     // -----------------------------------------------------------------------
     // Physical state  (accessible for validation / visualisation)
@@ -193,12 +203,30 @@ private:
     float betaBow_        = 0.10f;  ///< friction-curve nonlinearity β
 
     float noteFrequency_  = 440.0f; ///< fundamental frequency in Hz
+    float baseSpringDamping_ = 0.20f;
+    float baseMassDamping_ = 0.02f;
+    float baseBowForce_ = 0.50f;
+    float baseNonlinearity_ = 0.25f;
+    float baseExcitationRatio_ = 0.30f;
+    float basePickupBase_ = 0.70f;
+    float baseChaos_ = 0.0f;
+    float springModAmount_ = 0.0f;
+    float chaosSmoothed_ = 0.0f;
+    float chaosTarget_ = 0.0f;
+    int chaosCountdown_ = 0;
+    unsigned int chaosState_ = 0x12345678u;
 
     // -----------------------------------------------------------------------
     // System matrices  (assembled by calculateFullSystem*)
     // -----------------------------------------------------------------------
     std::vector<float> A_mat_;   ///< n_total × n_total, row-major
     std::vector<float> b_vec_;   ///< n_total RHS vector
+    std::vector<float> velocityScratch_;
+    std::vector<float> xStepStart_;
+    std::vector<float> xNewScratch_;
+    std::vector<float> weightScratch_;
+    std::vector<float> jacobianScratch_;
+    std::vector<float> residualScratch_;
 
     // -----------------------------------------------------------------------
     // Topology
