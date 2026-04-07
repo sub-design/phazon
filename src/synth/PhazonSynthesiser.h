@@ -2,6 +2,7 @@
 
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "NetworkVoice.h"
+#include "ModMatrix.h"
 
 /**
  * PhazonSynthesiser — MPE synthesiser with energy-based voice stealing.
@@ -28,6 +29,17 @@ public:
 
     /** Push a base-params snapshot to all voices (called once per audio block). */
     void setBaseParams (const PhysicsParams& params);
+    void setModMatrixConfig (const ModMatrix::Config& config);
+    void prepare (int maximumBlockSize);
+    void renderNextBlock (juce::AudioBuffer<float>& outputAudio,
+                          const juce::MidiBuffer& inputMidi,
+                          int startSample,
+                          int numSamples);
+
+    /** Returns the dominant voice visual snapshot for the editor visualiser. */
+    void getVisualizerData (float* nodes, int& count, float& rms) const noexcept;
+    const std::vector<float>& getDriveModulationBuffer() const noexcept  { return driveModBuffer_; }
+    const std::vector<float>& getCutoffModulationBuffer() const noexcept { return cutoffModBuffer_; }
 
 protected:
     /**
@@ -41,4 +53,9 @@ private:
     bool  ecoMode_        = false;
     int   activeVoiceCap_ = kDefaultPolyphony;
     NetworkVoice::ExcitationMode excitationMode_ = NetworkVoice::ExcitationMode::Bow;
+    ModMatrix::Config modMatrix_;
+    std::vector<float> driveModBuffer_;
+    std::vector<float> cutoffModBuffer_;
+
+    void aggregatePostModulation (int numSamples);
 };

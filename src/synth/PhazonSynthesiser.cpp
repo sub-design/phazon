@@ -6,7 +6,11 @@ PhazonSynthesiser::PhazonSynthesiser()
 {
     // Allocate max polyphony upfront; voices are reused across notes
     for (int i = 0; i < kDefaultPolyphony; ++i)
-        addVoice (new NetworkVoice());
+    {
+        auto* voice = new NetworkVoice();
+        voice->setVoiceIndex (i);
+        addVoice (voice);
+    }
 
     setVoiceStealingEnabled (true);
 
@@ -40,6 +44,62 @@ void PhazonSynthesiser::setBaseParams (const PhysicsParams& params)
     for (int i = 0; i < getNumVoices(); ++i)
         if (auto* v = dynamic_cast<NetworkVoice*> (getVoice (i)))
             v->setBaseParams (params);
+}
+
+void PhazonSynthesiser::setModMatrixConfig (const ModMatrix::Config& config)
+{
+    modMatrix_ = config;
+
+    for (int i = 0; i < getNumVoices(); ++i)
+        if (auto* v = dynamic_cast<NetworkVoice*> (getVoice (i)))
+            v->setModMatrixConfig (config);
+}
+
+void PhazonSynthesiser::prepare (int maximumBlockSize)
+{
+    driveModBuffer_.assign ((size_t) maximumBlockSize, 0.0f);
+    cutoffModBuffer_.assign ((size_t) maximumBlockSize, 0.0f);
+
+    for (int i = 0; i < getNumVoices(); ++i)
+        if (auto* v = dynamic_cast<NetworkVoice*> (getVoice (i)))
+            v->prepare (maximumBlockSize);
+}
+
+void PhazonSynthesiser::renderNextBlock (juce::AudioBuffer<float>& outputAudio,
+                                         const juce::MidiBuffer& inputMidi,
+                                         int startSample,
+                                         int numSamples)
+{
+    juce::MPESynthesiser::renderNextBlock (outputAudio, inputMidi, startSample, numSamples);
+    aggregatePostModulation (numSamples);
+}
+
+void PhazonSynthesiser::getVisualizerData (float* nodes, int& count, float& rms) const noexcept
+{
+    count = 8;
+    rms = 0.0f;
+
+    for (int i = 0; i < count; ++i)
+        nodes[i] = 0.0f;
+
+    const NetworkVoice* bestVoice = nullptr;
+    float bestRms = 0.0f;
+
+    for (int i = 0; i < activeVoiceCap_; ++i)
+    {
+        if (auto* voice = dynamic_cast<NetworkVoice*> (getVoice (i)))
+        {
+            const float voiceRms = voice->getCurrentRMS();
+            if (voiceRms > bestRms)
+            {
+                bestRms = voiceRms;
+                bestVoice = voice;
+            }
+        }
+    }
+
+    if (bestVoice != nullptr)
+        bestVoice->getVisualSnapshot (nodes, count, rms);
 }
 
 //==============================================================================
@@ -76,4 +136,44 @@ juce::MPESynthesiserVoice* PhazonSynthesiser::findVoiceToSteal (
     }
 
     return candidate;
+}
+
+void PhazonSynthesiser::aggregatePostModulation (int numSamples)
+{
+    jassert ((int) driveModBuffer_.size() >= numSamples);
+    jassert ((int) cutoffModBuffer_.size() >= numSamples);
+    std::fill (driveModBuffer_.begin(), driveModBuffer_.begin() + numSamples, 0.0f);
+    std::fill (cutoffModBuffer_.begin(), cutoffModBuffer_.begin() + numSamples, 0.0f);
+
+    int contributingVoices = 0;
+
+    for (int i = 0; i < activeVoiceCap_; ++i)
+    {
+        auto* rawVoice = getVoice (i);
+        auto* voice = dynamic_cast<NetworkVoice*> (rawVoice);
+        if (voice == nullptr || !voice->contributesToPostModulation())
+            continue;
+
+        const auto& drive = voice->getDriveModulationBuffer();
+        const auto& cutoff = voice->getCutoffModulationBuffer();
+        if ((int) drive.size() < numSamples || (int) cutoff.size() < numSamples)
+            continue;
+
+        ++contributingVoices;
+        for (int sample = 0; sample < numSamples; ++sample)
+        {
+            driveModBuffer_[(size_t) sample] += drive[(size_t) sample];
+            cutoffModBuffer_[(size_t) sample] += cutoff[(size_t) sample];
+        }
+    }
+
+    if (contributingVoices <= 1)
+        return;
+
+    const float scale = 1.0f / (float) contributingVoices;
+    for (int sample = 0; sample < numSamples; ++sample)
+    {
+        driveModBuffer_[(size_t) sample] *= scale;
+        cutoffModBuffer_[(size_t) sample] *= scale;
+    }
 }

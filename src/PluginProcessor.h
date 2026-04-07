@@ -3,6 +3,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "synth/PhazonSynthesiser.h"
 #include "presets/PresetManager.h"
+#include "PostProcessChain.h"
 
 class PhazonAudioProcessor : public juce::AudioProcessor
 {
@@ -45,6 +46,9 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     PhazonSynthesiser synthesiser_;
     PresetManager     presetManager;
+    PostProcessChain  postProcess_;
+
+    void getVisualizerData (float* nodes, int& count, float& rms) const noexcept;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
