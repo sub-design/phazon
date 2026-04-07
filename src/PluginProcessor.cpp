@@ -30,7 +30,10 @@ const juce::String PhazonAudioProcessor::getProgramName (int)           { return
 void PhazonAudioProcessor::changeProgramName (int, const juce::String&) {}
 
 //==============================================================================
-void PhazonAudioProcessor::prepareToPlay (double /*sampleRate*/, int /*samplesPerBlock*/) {}
+void PhazonAudioProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock*/)
+{
+    synthesiser_.setCurrentPlaybackSampleRate (sampleRate);
+}
 
 void PhazonAudioProcessor::releaseResources() {}
 
@@ -40,10 +43,11 @@ bool PhazonAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) c
 }
 
 void PhazonAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
-                                         juce::MidiBuffer& /*midiMessages*/)
+                                         juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
+    synthesiser_.renderNextBlock (buffer, midiMessages, 0, buffer.getNumSamples());
 }
 
 //==============================================================================

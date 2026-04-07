@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_utils/juce_audio_utils.h>
+#include "synth/PhazonSynthesiser.h"
 
 class PhazonAudioProcessor : public juce::AudioProcessor
 {
@@ -41,6 +42,7 @@ public:
 
     //==============================================================================
     juce::AudioProcessorValueTreeState apvts;
+    PhazonSynthesiser synthesiser_;
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
