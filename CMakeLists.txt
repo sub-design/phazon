@@ -19,7 +19,15 @@ FetchContent_MakeAvailable(JUCE)
 # ---------------------------------------------------------------------------
 # Plugin target
 # IS_SYNTH=TRUE → AU type is automatically kAudioUnitType_MusicDevice
+# AU is macOS-only; Windows builds VST3 + Standalone only
 # ---------------------------------------------------------------------------
+if(APPLE)
+    set(PHAZON_FORMATS VST3 AU Standalone)
+else()
+    set(PHAZON_FORMATS VST3 Standalone)
+endif()
+
+
 juce_add_plugin(Phazon
     VERSION                     0.1.0
     COMPANY_NAME                "Phazon"
@@ -32,7 +40,7 @@ juce_add_plugin(Phazon
     COPY_PLUGIN_AFTER_BUILD     FALSE
     PLUGIN_MANUFACTURER_CODE    Phzn
     PLUGIN_CODE                 Phz1
-    FORMATS                     VST3 AU Standalone
+    FORMATS                     ${PHAZON_FORMATS}
     PRODUCT_NAME                "Phazon"
     VST3_CATEGORIES             "Instrument" "Synth"
 )
