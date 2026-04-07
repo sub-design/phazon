@@ -30,6 +30,33 @@ void NetworkVoice::setExcitationMode (ExcitationMode mode) noexcept
     excitationMode_ = mode;
 }
 
+void NetworkVoice::setBaseParams (const PhysicsParams& params) noexcept
+{
+    baseParams_ = params;
+
+    // Push base values into the network; MPE overrides are re-applied per event
+    network_.p_springDamping   = params.springDamping;
+    network_.p_massDamping     = params.massDamping;
+    network_.p_bowForce        = params.bowForce;
+    network_.p_nonlinearity    = params.nonlinearity;
+    network_.p_excitationRatio = params.excitationRatio;
+    network_.p_bowWidth        = params.bowWidth;
+    network_.p_octave          = params.octave;
+    network_.p_detune          = params.detune;
+
+    if (network_.n_total != params.dimensions)
+        network_.changeDimensions (params.dimensions);
+
+    juce::ADSR::Parameters adsrP;
+    adsrP.attack  = params.attack;
+    adsrP.decay   = 0.0f;
+    adsrP.sustain = 1.0f;
+    adsrP.release = params.release;
+    adsr_.setParameters (adsrP);
+
+    network_.refreshCoefficients();
+}
+
 void NetworkVoice::setEcoMode (bool eco) noexcept
 {
     ecoMode_ = eco;

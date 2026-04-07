@@ -54,12 +54,15 @@ target_sources(Phazon
         src/PluginProcessor.cpp
         src/PluginEditor.h
         src/PluginEditor.cpp
+        src/ParameterIDs.h
         src/engine/NetworkIf.h
         src/engine/NetworkIf.cpp
         src/synth/NetworkVoice.h
         src/synth/NetworkVoice.cpp
         src/synth/PhazonSynthesiser.h
         src/synth/PhazonSynthesiser.cpp
+        src/presets/PresetManager.h
+        src/presets/PresetManager.cpp
 )
 
 target_include_directories(Phazon
@@ -67,6 +70,7 @@ target_include_directories(Phazon
         src
         src/engine
         src/synth
+        src/presets
 )
 
 # ---------------------------------------------------------------------------

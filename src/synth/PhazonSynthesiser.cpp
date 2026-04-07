@@ -35,15 +35,22 @@ void PhazonSynthesiser::setExcitationMode (NetworkVoice::ExcitationMode mode)
             v->setExcitationMode (mode);
 }
 
+void PhazonSynthesiser::setBaseParams (const PhysicsParams& params)
+{
+    for (int i = 0; i < getNumVoices(); ++i)
+        if (auto* v = dynamic_cast<NetworkVoice*> (getVoice (i)))
+            v->setBaseParams (params);
+}
+
 //==============================================================================
 juce::MPESynthesiserVoice* PhazonSynthesiser::findVoiceToSteal (
-    juce::MPENote /*noteToStealVoiceFor*/) noexcept
+    juce::MPENote /*noteToStealVoiceFor*/) const
 {
     // 1. Prefer an idle voice within the active polyphony cap
     for (int i = 0; i < activeVoiceCap_; ++i)
     {
         auto* v = getVoice (i);
-        if (!v->isCurrentlyPlayingNote())
+        if (!v->getCurrentlyPlayingNote().isValid())
             return v;
     }
 

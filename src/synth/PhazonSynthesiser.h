@@ -26,13 +26,16 @@ public:
     /** Set the excitation mode for all voices. */
     void setExcitationMode (NetworkVoice::ExcitationMode mode);
 
+    /** Push a base-params snapshot to all voices (called once per audio block). */
+    void setBaseParams (const PhysicsParams& params);
+
 protected:
     /**
      * Energy-based voice stealing.
      * Returns the first idle voice if one exists; otherwise returns the
      * currently-playing voice with the lowest output RMS.
      */
-    juce::MPESynthesiserVoice* findVoiceToSteal (juce::MPENote noteToStealVoiceFor) noexcept override;
+    juce::MPESynthesiserVoice* findVoiceToSteal (juce::MPENote noteToStealVoiceFor = juce::MPENote()) const override;
 
 private:
     bool  ecoMode_        = false;

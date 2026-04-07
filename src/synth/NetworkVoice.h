@@ -4,6 +4,26 @@
 #include "engine/NetworkIf.h"
 
 /**
+ * Snapshot of base (non-MPE) parameters pushed from the processor each block.
+ * All values are in raw (un-normalised) parameter units.
+ */
+struct PhysicsParams
+{
+    float springDamping   = 0.20f;
+    float massDamping     = 0.02f;
+    float bowForce        = 0.50f;
+    float nonlinearity    = 0.25f;
+    float excitationRatio = 0.30f;
+    float bowWidth        = 0.05f;
+    float drive           = 0.30f;
+    int   dimensions      = 8;
+    float attack          = 0.005f;
+    float release         = 0.300f;
+    float octave          = 0.0f;
+    float detune          = 0.0f;
+};
+
+/**
  * NetworkVoice — one MPE synthesiser voice.
  *
  * Wraps NetworkIf (the physical solver) inside a juce::MPESynthesiserVoice.
@@ -42,8 +62,13 @@ public:
                           int startSample, int numSamples)               override;
 
     //==========================================================================
-    void setExcitationMode (ExcitationMode mode) noexcept;
-    void setEcoMode        (bool eco)            noexcept;
+    void setExcitationMode (ExcitationMode mode)         noexcept;
+    void setEcoMode        (bool eco)                    noexcept;
+
+    /** Called once per block by PhazonSynthesiser to push APVTS base values.
+     *  MPE per-note deltas (pressure, pitchbend, timbre) are still applied
+     *  on top in the notePressureChanged / noteTimbreChanged callbacks. */
+    void setBaseParams     (const PhysicsParams& params) noexcept;
 
     /** Last computed block-level RMS — used by PhazonSynthesiser for voice stealing. */
     float getCurrentRMS() const noexcept { return rms_; }
@@ -53,6 +78,7 @@ private:
     juce::ADSR adsr_;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> gainSmoother_;
 
+    PhysicsParams  baseParams_;
     ExcitationMode excitationMode_ = ExcitationMode::Bow;
     bool  ecoMode_  = false;
     bool  tailOff_  = false;
