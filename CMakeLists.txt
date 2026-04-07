@@ -54,11 +54,14 @@ target_sources(Phazon
         src/PluginProcessor.cpp
         src/PluginEditor.h
         src/PluginEditor.cpp
+        src/engine/NetworkIf.h
+        src/engine/NetworkIf.cpp
 )
 
 target_include_directories(Phazon
     PRIVATE
         src
+        src/engine
 )
 
 # ---------------------------------------------------------------------------
