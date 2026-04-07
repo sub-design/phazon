@@ -11,12 +11,6 @@ PhazonAudioProcessorEditor::~PhazonAudioProcessorEditor() {}
 void PhazonAudioProcessorEditor::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colour (0xff1a1a2e));
-    g.setColour (juce::Colours::white);
-    g.setFont (24.0f);
-    g.drawFittedText ("Phazon", getLocalBounds(), juce::Justification::centred, 1);
 }
 
-void PhazonAudioProcessorEditor::resized()
-{
-    // TODO CN-289: lay out GUI components (ControlPanel, Crosshair, LFOsliders)
-}
+void PhazonAudioProcessorEditor::resized() {}
