@@ -58,6 +58,31 @@ void NetworkIf::setSampleRate (float sr)
     dt_         = 1.0f / sr;
 }
 
+void NetworkIf::updatePitch (float midiNote, float tuning)
+{
+    noteFrequency_ = 440.0f * std::pow (2.0f, (midiNote - 69.0f + tuning) / 12.0f);
+    refreshCoefficients();
+}
+
+void NetworkIf::renderNextBlock (float* output, int numSamples)
+{
+    for (int i = 0; i < numSamples; ++i)
+    {
+        switch (profile_)
+        {
+            case Profile::OneDimensional:  calculateFullSystem1D();  break;
+            case Profile::TwoDimensional:  calculateFullSystem2D();  break;
+            case Profile::Eco:             calculateFullSystemEco(); break;
+        }
+
+        if (bowVelocity != 0.0f)
+            bow();
+
+        NR();
+        output[i] = getROutput (p_pickupBase);
+    }
+}
+
 //==============================================================================
 // Configuration
 //==============================================================================

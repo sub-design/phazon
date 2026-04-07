@@ -56,12 +56,17 @@ target_sources(Phazon
         src/PluginEditor.cpp
         src/engine/NetworkIf.h
         src/engine/NetworkIf.cpp
+        src/synth/NetworkVoice.h
+        src/synth/NetworkVoice.cpp
+        src/synth/PhazonSynthesiser.h
+        src/synth/PhazonSynthesiser.cpp
 )
 
 target_include_directories(Phazon
     PRIVATE
         src
         src/engine
+        src/synth
 )
 
 # ---------------------------------------------------------------------------

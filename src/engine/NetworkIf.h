@@ -123,6 +123,17 @@ public:
     static void interpolation3Mult (float* arr, int n, float pos, float value);
 
     // -----------------------------------------------------------------------
+    // Block-level interface  (called by NetworkVoice::renderNextBlock)
+    // -----------------------------------------------------------------------
+
+    /** Run the full per-sample pipeline (calculateFullSystem / bow / NR /
+     *  getROutput) for @p numSamples and write mono output to @p output. */
+    void renderNextBlock (float* output, int numSamples);
+
+    /** Update pitch mid-note without resetting state (for MPE pitchbend). */
+    void updatePitch (float midiNote, float tuning);
+
+    // -----------------------------------------------------------------------
     // UI parameters  (write from MPESynthVoice / setParameterWithID)
     // -----------------------------------------------------------------------
     float p_springDamping   = 0.20f;  ///< β — stiffness-proportional damping [0..1]
