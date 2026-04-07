@@ -4,7 +4,9 @@ project(Phazon VERSION 0.1.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# ---------------------------------------------------------------------------
 # JUCE via FetchContent
+# ---------------------------------------------------------------------------
 include(FetchContent)
 FetchContent_Declare(
     JUCE
@@ -14,10 +16,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
+# ---------------------------------------------------------------------------
+# Plugin target
+# IS_SYNTH=TRUE → AU type is automatically kAudioUnitType_MusicDevice
+# ---------------------------------------------------------------------------
 juce_add_plugin(Phazon
     VERSION                     0.1.0
     COMPANY_NAME                "Phazon"
-    COMPANY_WEBSITE             ""
     DESCRIPTION                 "MPE-aware nonlinear physical-modeling synthesizer"
     IS_SYNTH                    TRUE
     NEEDS_MIDI_INPUT            TRUE
@@ -30,12 +35,16 @@ juce_add_plugin(Phazon
     FORMATS                     VST3 AU Standalone
     PRODUCT_NAME                "Phazon"
     VST3_CATEGORIES             "Instrument" "Synth"
-    AU_MAIN_TYPE                kAudioUnitType_MusicDevice
 )
 
+# ---------------------------------------------------------------------------
+# Sources
+# ---------------------------------------------------------------------------
 target_sources(Phazon
     PRIVATE
+        src/PluginProcessor.h
         src/PluginProcessor.cpp
+        src/PluginEditor.h
         src/PluginEditor.cpp
 )
 
@@ -44,6 +53,9 @@ target_include_directories(Phazon
         src
 )
 
+# ---------------------------------------------------------------------------
+# Compile definitions
+# ---------------------------------------------------------------------------
 target_compile_definitions(Phazon
     PUBLIC
         JUCE_WEB_BROWSER=0
@@ -52,6 +64,9 @@ target_compile_definitions(Phazon
         JUCE_DISPLAY_SPLASH_SCREEN=0
 )
 
+# ---------------------------------------------------------------------------
+# Link libraries
+# ---------------------------------------------------------------------------
 target_link_libraries(Phazon
     PRIVATE
         juce::juce_audio_utils
