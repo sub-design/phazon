@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14        # Apple Silicon; builds VST3 + AU + Standalone
+            generator: Xcode
+            build_config: Release
+          - os: windows-latest  # builds VST3 + Standalone
+            generator: Visual Studio 17 2022
+            build_config: Release
+
+    steps:
+      # -----------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Cache the JUCE FetchContent clone so it is not re-downloaded every run.
+      # Key is tied to the CMakeLists.txt hash so it busts when JUCE tag changes.
+      - name: Cache JUCE source
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: juce-${{ matrix.os }}-${{ hashFiles('CMakeLists.txt') }}
+          restore-keys: |
+            juce-${{ matrix.os }}-
+
+      # -----------------------------------------------------------------------
+      - name: Configure
+        run: >
+          cmake -B build
+          -G "${{ matrix.generator }}"
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_config }}
+
+      # -----------------------------------------------------------------------
+      - name: Build VST3
+        run: >
+          cmake --build build
+          --config ${{ matrix.build_config }}
+          --target Phazon_VST3
+          --parallel
+
+      - name: Build Standalone
+        run: >
+          cmake --build build
+          --config ${{ matrix.build_config }}
+          --target Phazon_Standalone
+          --parallel
+
+      - name: Build AU
+        if: runner.os == 'macOS'
+        run: >
+          cmake --build build
+          --config ${{ matrix.build_config }}
+          --target Phazon_AU
+          --parallel
+
+      # -----------------------------------------------------------------------
+      - name: Upload VST3 artifact (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phazon-VST3-macOS
+          path: build/Phazon_artefacts/${{ matrix.build_config }}/VST3/Phazon.vst3
+          if-no-files-found: error
+
+      - name: Upload AU artifact
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phazon-AU-macOS
+          path: build/Phazon_artefacts/${{ matrix.build_config }}/AU/Phazon.component
+          if-no-files-found: error
+
+      - name: Upload Standalone artifact (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phazon-Standalone-macOS
+          path: build/Phazon_artefacts/${{ matrix.build_config }}/Standalone/Phazon.app
+          if-no-files-found: error
+
+      - name: Upload VST3 artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phazon-VST3-Windows
+          path: build/Phazon_artefacts/${{ matrix.build_config }}/VST3/Phazon.vst3
+          if-no-files-found: error
+
+      - name: Upload Standalone artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Phazon-Standalone-Windows
+          path: build/Phazon_artefacts/${{ matrix.build_config }}/Standalone/Phazon.exe
+          if-no-files-found: error
