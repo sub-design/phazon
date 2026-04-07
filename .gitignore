@@ -1,0 +1,13 @@
+build/
+Builds/
+cmake-build-*/
+_deps/
+.DS_Store
+*.user
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.cbp
